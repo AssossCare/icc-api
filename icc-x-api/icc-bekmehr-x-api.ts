@@ -182,7 +182,6 @@ export class IccBekmehrXApi extends iccBeKmehrApi {
     patientId: string,
     healthcarePartyId: string,
     language: string,
-    version: number,
     body: models.MedicationSchemeExportInfoDto,
     sessionId?: string
   ): Promise<Blob> {
@@ -195,7 +194,7 @@ export class IccBekmehrXApi extends iccBeKmehrApi {
       socket.addEventListener("open", function() {
         socket.send(
           JSON.stringify({
-            parameters: { patientId: patientId, language: language, version: version, info: body }
+            parameters: { patientId: patientId, language: language, info: body }
           })
         )
       })
