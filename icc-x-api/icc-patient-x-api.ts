@@ -15,6 +15,7 @@ import { DocumentDto, ListOfIdsDto } from "../icc-api/model/models"
 import { retry } from "./utils/net-utils"
 import { utils } from "./crypto/utils"
 import { DelegationDto } from "../icc-api/model/models"
+import { IccCalendarItemXApi } from "./icc-calendar-item-x-api"
 
 // noinspection JSUnusedGlobalSymbols
 export class IccPatientXApi extends iccPatientApi {
@@ -26,6 +27,7 @@ export class IccPatientXApi extends iccPatientApi {
   hcpartyApi: IccHcpartyXApi
   documentApi: IccDocumentXApi
   classificationApi: IccClassificationXApi
+  calendarItemApi: IccCalendarItemXApi
 
   private cryptedKeys: Array<string>
 
@@ -40,6 +42,7 @@ export class IccPatientXApi extends iccPatientApi {
     documentApi: IccDocumentXApi,
     hcpartyApi: IccHcpartyXApi,
     classificationApi: IccClassificationXApi,
+    calendarItemaApi: IccCalendarItemXApi,
     cryptedKeys: Array<string> = ["note"],
     fetchImpl: (input: RequestInfo, init?: RequestInit) => Promise<Response> = typeof window !==
     "undefined"
@@ -55,6 +58,7 @@ export class IccPatientXApi extends iccPatientApi {
     this.hcpartyApi = hcpartyApi
     this.documentApi = documentApi
     this.classificationApi = classificationApi
+    this.calendarItemApi = calendarItemaApi
 
     this.cryptedKeys = cryptedKeys
   }
@@ -699,6 +703,39 @@ export class IccPatientXApi extends iccPatientApi {
     patient: models.PatientDto | null
     statuses: { [key: string]: { success: boolean | null; error: Error | null } }
   } | null> {
+    const addDelegationsAndKeys = (
+      dtos: Array<models.FormDto>,
+      markerPromise: Promise<any>,
+      delegateId: string,
+      patient: models.PatientDto | null
+    ) => {
+      return dtos.reduce(
+        (p, x) =>
+          p.then(() =>
+            Promise.all([
+              this.crypto.extractDelegationsSFKs(x, ownerId),
+              this.crypto.extractEncryptionsSKs(x, ownerId)
+            ]).then(([sfks, eks]) => {
+              console.log(`share ${x.id} to ${delegateId}`)
+              return this.crypto
+                .addDelegationsAndEncryptionKeys(
+                  patient,
+                  x,
+                  ownerId,
+                  delegateId,
+                  sfks.extractedKeys[0],
+                  eks.extractedKeys[0]
+                )
+                .catch((e: any) => {
+                  console.log(e)
+                  return x
+                })
+            })
+          ),
+        markerPromise
+      )
+    }
+
     return this.hcpartyApi.getHealthcareParty(ownerId).then(hcp => {
       const parentId = hcp.parentId
       const allTags = _.uniq(_.flatMap(Object.values(delegationTags)))
@@ -725,6 +762,10 @@ export class IccPatientXApi extends iccPatientApi {
           error: null
         },
         classifications: {
+          success: allTags.includes("medicalInformation") || allTags.includes("all") ? false : null,
+          error: null
+        },
+        calendarItems: {
           success: allTags.includes("medicalInformation") || allTags.includes("all") ? false : null,
           error: null
         },
@@ -821,8 +862,20 @@ export class IccPatientXApi extends iccPatientApi {
                                   .then(moreCls => _.uniqBy(cls.concat(moreCls), "id"))
                               : cls
                         )
-                    ) as Promise<Array<models.ClassificationDto>>
-                  ]).then(([hes, frms, ctcs, ivs, cls]) => {
+                    ) as Promise<Array<models.ClassificationDto>>,
+                    retry(() =>
+                      this.calendarItemApi
+                        .findByHCPartyPatientSecretFKeys(ownerId, delSfks.join(","))
+                        .then(
+                          cls =>
+                            parentId
+                              ? this.calendarItemApi
+                                  .findByHCPartyPatientSecretFKeys(parentId, delSfks.join(","))
+                                  .then(moreCls => _.uniqBy(cls.concat(moreCls), "id"))
+                              : cls
+                        )
+                    ) as Promise<Array<models.CalendarItemDto>>
+                  ]).then(([hes, frms, ctcs, ivs, cls, cis]) => {
                     const ctcsStubs = ctcs.map(c => ({
                       id: c.id,
                       rev: c.rev,
@@ -859,6 +912,13 @@ export class IccPatientXApi extends iccPatientApi {
                       })
                     )
                     const oCls = cls.map(x =>
+                      _.assign({}, x, {
+                        delegations: _.clone(x.delegations),
+                        cryptedForeignKeys: _.clone(x.cryptedForeignKeys),
+                        encryptionKeys: _.clone(x.encryptionKeys)
+                      })
+                    )
+                    const oCis = cis.map(x =>
                       _.assign({}, x, {
                         delegations: _.clone(x.delegations),
                         cryptedForeignKeys: _.clone(x.cryptedForeignKeys),
@@ -905,142 +965,91 @@ export class IccPatientXApi extends iccPatientApi {
                               delSfks[0],
                               ecKeys[0]
                             )
+                            .then(async patient => {
+                              if (delSfks.length > 1) {
+                                return delSfks
+                                  .slice(1)
+                                  .reduce(
+                                    async (
+                                      patientPromise: Promise<models.PatientDto>,
+                                      delSfk: string
+                                    ) => {
+                                      const patient = await patientPromise
+                                      return this.crypto
+                                        .addDelegationsAndEncryptionKeys(
+                                          null,
+                                          patient,
+                                          ownerId,
+                                          delegateId,
+                                          delSfk,
+                                          null
+                                        )
+                                        .catch((e: any) => {
+                                          console.log(e)
+                                          return patient
+                                        })
+                                    },
+                                    Promise.resolve(patient)
+                                  )
+                              }
+                              return patient
+                            })
                             .catch(e => {
                               console.log(e)
                               return patient
                             })
                         })
-                        tags.includes("medicalInformation") ||
-                          (tags.includes("all") &&
-                            hes.forEach(
-                              x =>
-                                (markerPromise = markerPromise.then(() =>
-                                  Promise.all([
-                                    this.crypto.extractDelegationsSFKs(x, ownerId),
-                                    this.crypto.extractEncryptionsSKs(x, ownerId)
-                                  ]).then(([sfks, eks]) => {
-                                    console.log(`share ${x.id} to ${delegateId}`)
-                                    return this.crypto
-                                      .addDelegationsAndEncryptionKeys(
-                                        patient,
-                                        x,
-                                        ownerId,
-                                        delegateId,
-                                        sfks.extractedKeys[0],
-                                        eks.extractedKeys[0]
-                                      )
-                                      .catch(e => {
-                                        console.log(e)
-                                        return x
-                                      })
-                                  })
-                                ))
-                            ))
-                        tags.includes("medicalInformation") ||
-                          (tags.includes("all") &&
-                            frms.forEach(
-                              x =>
-                                (markerPromise = markerPromise.then(() =>
-                                  Promise.all([
-                                    this.crypto.extractDelegationsSFKs(x, ownerId),
-                                    this.crypto.extractEncryptionsSKs(x, ownerId)
-                                  ]).then(([sfks, eks]) => {
-                                    console.log(`share ${x.id} to ${delegateId}`)
-                                    return this.crypto
-                                      .addDelegationsAndEncryptionKeys(
-                                        patient,
-                                        x,
-                                        ownerId,
-                                        delegateId,
-                                        sfks.extractedKeys[0],
-                                        eks.extractedKeys[0]
-                                      )
-                                      .catch(e => {
-                                        console.log(e)
-                                        return x
-                                      })
-                                  })
-                                ))
-                            ))
-                        tags.includes("medicalInformation") ||
-                          (tags.includes("all") &&
-                            ctcsStubs.forEach(
-                              x =>
-                                (markerPromise = markerPromise.then(() =>
-                                  Promise.all([
-                                    this.crypto.extractDelegationsSFKs(x, ownerId),
-                                    this.crypto.extractEncryptionsSKs(x, ownerId)
-                                  ]).then(([sfks, eks]) => {
-                                    console.log(`share ${patient.id} to ${delegateId}`)
-                                    return this.crypto
-                                      .addDelegationsAndEncryptionKeys(
-                                        patient,
-                                        x,
-                                        ownerId,
-                                        delegateId,
-                                        sfks.extractedKeys[0],
-                                        eks.extractedKeys[0]
-                                      )
-                                      .catch(e => {
-                                        console.log(e)
-                                        return x
-                                      })
-                                  })
-                                ))
-                            ))
-                        tags.includes("financialInformation") ||
-                          (tags.includes("all") &&
-                            ivs.forEach(
-                              x =>
-                                (markerPromise = markerPromise.then(() =>
-                                  Promise.all([
-                                    this.crypto.extractDelegationsSFKs(x, ownerId),
-                                    this.crypto.extractEncryptionsSKs(x, ownerId)
-                                  ]).then(([sfks, eks]) => {
-                                    console.log(`share ${patient.id} to ${delegateId}`)
-                                    return this.crypto
-                                      .addDelegationsAndEncryptionKeys(
-                                        patient,
-                                        x,
-                                        ownerId,
-                                        delegateId,
-                                        sfks.extractedKeys[0],
-                                        eks.extractedKeys[0]
-                                      )
-                                      .catch(e => {
-                                        console.log(e)
-                                        return x
-                                      })
-                                  })
-                                ))
-                            ))
-                        tags.includes("medicalInformation") ||
-                          (tags.includes("all") &&
-                            docs.forEach(
-                              (x: DocumentDto) =>
-                                (markerPromise = markerPromise.then(() =>
-                                  Promise.all([
-                                    this.crypto.extractDelegationsSFKs(x, ownerId),
-                                    this.crypto.extractEncryptionsSKs(x, ownerId)
-                                  ]).then(([sfks, eks]) => {
-                                    console.log(`share ${patient.id} to ${delegateId}`)
-                                    return this.crypto
-                                      .addDelegationsAndEncryptionKeys(
-                                        patient,
-                                        x,
-                                        ownerId,
-                                        delegateId,
-                                        sfks.extractedKeys[0],
-                                        eks.extractedKeys[0]
-                                      )
-                                      .catch(e => {
-                                        console.log(e)
-                                        return x
-                                      })
-                                  })
-                                ))
-                            ))
+                        ;(tags.includes("medicalInformation") || tags.includes("all")) &&
+                          (markerPromise = addDelegationsAndKeys(
+                            hes,
+                            markerPromise,
+                            delegateId,
+                            patient
+                          ))
+                        ;(tags.includes("medicalInformation") || tags.includes("all")) &&
+                          (markerPromise = addDelegationsAndKeys(
+                            frms,
+                            markerPromise,
+                            delegateId,
+                            patient
+                          ))
+                        ;(tags.includes("medicalInformation") || tags.includes("all")) &&
+                          (markerPromise = addDelegationsAndKeys(
+                            ctcsStubs,
+                            markerPromise,
+                            delegateId,
+                            patient
+                          ))
+                        ;(tags.includes("medicalInformation") || tags.includes("all")) &&
+                          (markerPromise = addDelegationsAndKeys(
+                            cls,
+                            markerPromise,
+                            delegateId,
+                            patient
+                          ))
+                        ;(tags.includes("medicalInformation") || tags.includes("all")) &&
+                          (markerPromise = addDelegationsAndKeys(
+                            cis,
+                            markerPromise,
+                            delegateId,
+                            patient
+                          ))
+                        ;(tags.includes("financialInformation") || tags.includes("all")) &&
+                          (markerPromise = addDelegationsAndKeys(
+                            ivs,
+                            markerPromise,
+                            delegateId,
+                            patient
+                          ))
+                        ;(tags.includes("medicalInformation") || tags.includes("all")) &&
+                          (markerPromise = addDelegationsAndKeys(
+                            docs,
+                            markerPromise,
+                            delegateId,
+                            null
+                          ))
                       })
+
                       return markerPromise
                         .then(() => {
                           console.log("scd")
@@ -1115,6 +1124,18 @@ export class IccPatientXApi extends iccPatientApi {
                                 .then(() => (status.classifications.success = true))
                                 .catch(e => (status.classifications.error = e))) ||
                             Promise.resolve((status.classifications.success = true))
+                          )
+                        })
+                        .then(() => {
+                          console.log("scid")
+                          return (
+                            ((allTags.includes("medicalInformation") || allTags.includes("all")) &&
+                              (cis && cis.length && !_.isEqual(oCis, cis)) &&
+                              this.calendarItemApi
+                                .setCalendarItemsDelegations(cis)
+                                .then(() => (status.calendarItems.success = true))
+                                .catch(e => (status.calendarItems.error = e))) ||
+                            Promise.resolve((status.calendarItems.success = true))
                           )
                         })
                         .then(() => this.modifyPatientWithUser(user, patient))

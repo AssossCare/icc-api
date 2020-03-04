@@ -173,6 +173,7 @@ export class iccBeKmehrApi {
   generateMedicationSchemeExport(
     patientId: string,
     language?: string,
+    recipientSafe?: string,
     version?: number,
     body?: models.MedicationSchemeExportInfoDto
   ): Promise<ArrayBuffer | any> {
@@ -185,6 +186,7 @@ export class iccBeKmehrApi {
       "?ts=" +
       new Date().getTime() +
       (language ? "&language=" + language : "") +
+      (recipientSafe ? "&recipientSafe=" + recipientSafe : "") +
       (version ? "&version=" + version : "")
     let headers = this.headers
     headers = headers
