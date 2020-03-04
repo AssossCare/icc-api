@@ -59,7 +59,37 @@ describe("Init confidential delegation in patient", () => {
       const user = await api.usericc.getCurrentUser()
       await initKeys(api, user)
 
-      const pat = await api.patienticc.newInstance(user, { firstName: "John", lastName: "Doe" })
+      const pat = await api.patienticc.newInstance(user, { firstName: "Daf", lastName: "Marathon" })
+      const modifiedPatient = await api.patienticc.initConfidentialDelegation(pat, user)
+
+      const confidentialDelegationKey = await api.cryptoicc.extractPreferredSfk(
+        pat,
+        user.healthcarePartyId,
+        true
+      )
+      const nonConfidentialDelegationKey = await api.cryptoicc.extractPreferredSfk(
+        pat,
+        user.healthcarePartyId,
+        false
+      )
+
+      expect(confidentialDelegationKey === nonConfidentialDelegationKey).to.equal(false)
+    } catch (e) {
+      console.log(e)
+    }
+  })
+})
+
+describe("Init confidential delegation in patient from MH", () => {
+  it("should return a patient with a confidential delegation", async () => {
+    try {
+      const user = await api.usericc.getCurrentUser()
+      await initKeys(api, user)
+
+      const pat = await mhapi.patienticc.newInstance(user, {
+        firstName: "Daf",
+        lastName: "Marathon2"
+      })
       const modifiedPatient = await api.patienticc.initConfidentialDelegation(pat, user)
 
       const confidentialDelegationKey = await api.cryptoicc.extractPreferredSfk(
