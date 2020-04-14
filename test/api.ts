@@ -8,7 +8,8 @@ import {
   IccFormXApi,
   IccInvoiceXApi,
   IccDocumentXApi,
-  IccClassificationXApi
+  IccClassificationXApi,
+  IccCalendarItemXApi
 } from "../icc-x-api"
 
 import { iccPatientApi, iccEntityrefApi, iccBeKmehrApi } from "../icc-api/iccApi"
@@ -16,6 +17,7 @@ import { iccPatientApi, iccEntityrefApi, iccBeKmehrApi } from "../icc-api/iccApi
 import fetch from "node-fetch"
 import * as WebCrypto from "node-webcrypto-ossl"
 import { UserDto } from "../icc-api/model/UserDto"
+import { iccCalendarItemApi } from "../dist"
 
 export class Api {
   private _entityreficc: iccEntityrefApi
@@ -30,6 +32,7 @@ export class Api {
   private _classificationicc: IccClassificationXApi
   private _bekmehricc: iccBeKmehrApi
   private _patienticc: IccPatientXApi
+  private _calendaricc: IccCalendarItemXApi
 
   private _currentUser: UserDto | null
 
@@ -63,6 +66,7 @@ export class Api {
     this._helementicc = new IccHelementXApi(host, headers, this._cryptoicc, fetchImpl)
     this._classificationicc = new IccClassificationXApi(host, headers, this._cryptoicc, fetchImpl)
     this._bekmehricc = new iccBeKmehrApi(host, headers, fetchImpl)
+    this._calendaricc = new IccCalendarItemXApi(host, headers, this._cryptoicc, fetchImpl)
     this._patienticc = new IccPatientXApi(
       host,
       headers,
@@ -74,6 +78,7 @@ export class Api {
       this._documenticc,
       this._hcpartyicc,
       this._classificationicc,
+      this._calendaricc,
       ["note"],
       fetchImpl
     )

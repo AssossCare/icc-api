@@ -146,3 +146,41 @@ describe("test that confidential information cannot be retrieved at MH level", (
     }
   })
 })
+
+describe("test that confidential contact cannot be retrieved at MH level", () => {
+  it("should find the confidential data only when logged as the user", async () => {
+    try {
+      const user = await api.usericc.getCurrentUser()
+      const mhUser = await mhapi.usericc.getCurrentUser()
+      await initKeys(api, user)
+      await initKeys(mhapi, mhUser)
+
+      const pat = await api.patienticc.newInstance(user, { firstName: "John", lastName: "DoeCtc2" })
+      const modifiedPatient = (await api.patienticc.initConfidentialDelegation(pat, user))!!
+
+      await api.contacticc.createContactWithUser(
+        user,
+        await api.contacticc.newInstance(
+          user,
+          modifiedPatient,
+          { descr: "Confidential info" },
+          true
+        )
+      )
+
+      const retrievedHesAsUser = await api.contacticc.findBy(
+        user.healthcarePartyId,
+        modifiedPatient
+      )
+      const retrievedHesAsMh = await mhapi.contacticc.findBy(
+        mhUser.healthcarePartyId,
+        modifiedPatient
+      )
+
+      expect(retrievedHesAsUser.length).to.equal(1, "User should see its confidential data")
+      expect(retrievedHesAsMh.length).to.equal(0, "MH should not see confidential data")
+    } catch (e) {
+      console.log(e)
+    }
+  })
+})
