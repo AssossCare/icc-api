@@ -13,6 +13,8 @@ import { CopaymentDto } from "./CopaymentDto"
 import { PricingDto } from "./PricingDto"
 import { ReimbursementCriterionDto } from "./ReimbursementCriterionDto"
 
+import { decodeBase64 } from "./ModelHelper"
+
 export class ReimbursementDto {
   constructor(json: JSON | any) {
     Object.assign(this as ReimbursementDto, json)
@@ -26,6 +28,7 @@ export class ReimbursementDto {
   multiple?: ReimbursementDto.MultipleEnum
   temporary?: boolean
   reference?: boolean
+  legalReferencePath?: string
   flatRateSystem?: boolean
   reimbursementBasePrice?: number
   referenceBasePrice?: number

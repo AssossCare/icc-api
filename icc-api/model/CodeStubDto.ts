@@ -10,12 +10,15 @@
  * Do not edit the class manually.
  */
 
+import { decodeBase64 } from "./ModelHelper"
+
 export class CodeStubDto {
   constructor(json: JSON | any) {
     Object.assign(this as CodeStubDto, json)
   }
 
   id?: string
+  context?: string
   type?: string
   code?: string
   version?: string

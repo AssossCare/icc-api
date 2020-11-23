@@ -1,6 +1,6 @@
 {
   "name": "@taktik/icc-api",
-  "version": "3.0.31",
+  "version": "3.0.53",
   "description": "Typescript version of iCure standalone API client",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,7 +11,8 @@
     "lodash": "^4.17.12",
     "moment": "^2.22.1",
     "text-encoding": "^0.7.0",
-    "uuid-encoder": "^1.1.0"
+    "uuid-encoder": "^1.1.0",
+    "node-webcrypto-ossl": "^1.0.48"
   },
   "devDependencies": {
     "@types/base64-js": "^1.2.5",
@@ -37,7 +38,7 @@
     "karma-typescript-es6-transform": "^4.1.0",
     "mixin-deep": "^1.3.2",
     "mocha": "^6.2.0",
-    "node-fetch": "^2.6.0",
+    "node-fetch": "^2.6.1",
     "node-localstorage": "^1.3.1",
     "prettier": "^1.13.5",
     "pretty-quick": "^1.6.0",
@@ -53,10 +54,9 @@
     "node-webcrypto-ossl": "^1.0.48"
   },
   "scripts": {
-    "genhtml": "java -classpath swagger-codegen-cli.jar io.swagger.codegen.SwaggerCodegen generate -i https://backendb.svc.icure.cloud/rest/v1/swagger.json -l html --additional-properties classPrefix=icc -o ./apidocs",
-    "gen": "java -classpath swagger-codegen-cli.jar io.swagger.codegen.SwaggerCodegen generate -i https://backendb.svc.icure.cloud/rest/v1/swagger.json -l typescript --additional-properties classPrefix=icc -o ./icc-api",
-    "genloc": "java -classpath swagger-codegen-cli.jar io.swagger.codegen.SwaggerCodegen generate -i http://127.0.0.1:16043/v3/api-docs -l typescript --additional-properties classPrefix=icc -o ./icc-api",
-    "gendev": "java -classpath swagger-codegen-cli.jar io.swagger.codegen.SwaggerCodegen generate -i https://backend-reactive.icure.dev/v3/api-docs -l typescript --additional-properties classPrefix=icc -o ./icc-api",
+    "gen": "java -classpath swagger-codegen-generators.jar io.swagger.codegen.v3.cli.SwaggerCodegen generate -i https://kraken.svc.icure.cloud/v3/api-docs -l typescript --additional-properties classPrefix=icc skipPathPrefix=/rest/v1 -o ./icc-api/",
+    "genloc": "java -classpath swagger-codegen-generators.jar io.swagger.codegen.v3.cli.SwaggerCodegen generate -i http://127.0.0.1:16043/v3/api-docs -l typescript --additional-properties classPrefix=icc skipPathPrefix=/rest/v1 -o ./icc-api/",
+    "gendev": "java -classpath swagger-codegen-generators.jar io.swagger.codegen.v3.cli.SwaggerCodegen generate -i https://kraken.icure.dev/v3/api-docs -l typescript --additional-properties classPrefix=icc skipPathPrefix=/rest/v1 -o ./icc-api/",
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "prepare": "rimraf dist && npm run build",

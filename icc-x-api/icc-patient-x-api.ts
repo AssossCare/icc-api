@@ -1,4 +1,4 @@
-import { iccPatientApi } from "../icc-api/iccApi"
+import { iccPatientApi, iccEntityrefApi, iccAuthApi } from "../icc-api/iccApi"
 import { IccCryptoXApi } from "./icc-crypto-x-api"
 import { IccContactXApi } from "./icc-contact-x-api"
 import { IccFormXApi } from "./icc-form-x-api"
@@ -9,11 +9,11 @@ import { IccHelementXApi } from "./icc-helement-x-api"
 import { IccClassificationXApi } from "./icc-classification-x-api"
 
 import * as _ from "lodash"
-import { XHR } from "../icc-api/api/XHR"
 import * as models from "../icc-api/model/models"
 import {
   CalendarItemDto,
   ClassificationDto,
+  DelegationDto,
   DocumentDto,
   IcureStubDto,
   InvoiceDto,
@@ -21,8 +21,8 @@ import {
 } from "../icc-api/model/models"
 import { retry } from "./utils/net-utils"
 import { utils } from "./crypto/utils"
-import { DelegationDto } from "../icc-api/model/models"
 import { IccCalendarItemXApi } from "./icc-calendar-item-x-api"
+import { decodeBase64 } from "../icc-api/model/ModelHelper"
 
 // noinspection JSUnusedGlobalSymbols
 export class IccPatientXApi extends iccPatientApi {
@@ -37,6 +37,62 @@ export class IccPatientXApi extends iccPatientApi {
   calendarItemApi: IccCalendarItemXApi
 
   private cryptedKeys: Array<string>
+
+  public static api(
+    host: string,
+    username: string,
+    password: string,
+    crypto: Crypto = typeof window !== "undefined"
+      ? window.crypto
+      : typeof self !== "undefined"
+        ? self.crypto
+        : ({} as Crypto),
+    fetchImpl: (input: RequestInfo, init?: RequestInit) => Promise<Response> = typeof window !==
+    "undefined"
+      ? window.fetch
+      : typeof self !== "undefined"
+        ? self.fetch
+        : fetch
+  ) {
+    const headers = {
+      Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`
+    }
+    const hcPartyApi = new IccHcpartyXApi(host, headers, fetchImpl)
+    const cryptoApi = new IccCryptoXApi(
+      host,
+      headers,
+      hcPartyApi,
+      new iccPatientApi(host, headers, fetchImpl),
+      crypto
+    )
+    return new IccPatientXApi(
+      host,
+      headers,
+      cryptoApi,
+      new IccContactXApi(host, headers, cryptoApi, fetchImpl),
+      new IccFormXApi(host, headers, cryptoApi, fetchImpl),
+      new IccHelementXApi(host, headers, cryptoApi, fetchImpl),
+      new IccInvoiceXApi(
+        host,
+        headers,
+        cryptoApi,
+        new iccEntityrefApi(host, headers, fetchImpl),
+        fetchImpl
+      ),
+      new IccDocumentXApi(
+        host,
+        headers,
+        cryptoApi,
+        new iccAuthApi(host, headers, fetchImpl),
+        fetchImpl
+      ),
+      hcPartyApi,
+      new IccClassificationXApi(host, headers, cryptoApi, fetchImpl),
+      new IccCalendarItemXApi(host, headers, cryptoApi, fetchImpl),
+      ["note"],
+      fetchImpl
+    )
+  }
 
   constructor(
     host: string,
@@ -54,7 +110,9 @@ export class IccPatientXApi extends iccPatientApi {
     fetchImpl: (input: RequestInfo, init?: RequestInit) => Promise<Response> = typeof window !==
     "undefined"
       ? window.fetch
-      : (self.fetch as any)
+      : typeof self !== "undefined"
+        ? self.fetch
+        : fetch
   ) {
     super(host, headers, fetchImpl)
     this.crypto = crypto
@@ -576,7 +634,16 @@ export class IccPatientXApi extends iccPatientApi {
             utils.crypt(
               p,
               (obj: { [key: string]: string }) =>
-                this.crypto.AES.encrypt(key, utils.utf82ua(JSON.stringify(obj))),
+                this.crypto.AES.encrypt(
+                  key,
+                  utils.utf82ua(
+                    JSON.stringify(obj, (k, v) => {
+                      return v instanceof ArrayBuffer || v instanceof Uint8Array
+                        ? btoa(new Uint8Array(v).reduce((d, b) => d + String.fromCharCode(b), ""))
+                        : v
+                    })
+                  )
+                ),
               this.cryptedKeys
             )
           )
@@ -643,26 +710,33 @@ export class IccPatientXApi extends iccPatientApi {
                         "raw",
                         utils.hex2ua(sfks[0].replace(/-/g, ""))
                       ).then(key =>
-                        utils.decrypt(p, ec =>
-                          this.crypto.AES.decrypt(key, ec)
-                            .then(dec => {
-                              const jsonContent = dec && utils.ua2utf8(dec)
-                              try {
-                                return JSON.parse(jsonContent)
-                              } catch (e) {
-                                console.log(
-                                  "Cannot parse patient",
-                                  p.id,
-                                  jsonContent || "Invalid content"
-                                )
+                        utils
+                          .decrypt(p, ec =>
+                            this.crypto.AES.decrypt(key, ec)
+                              .then(dec => {
+                                const jsonContent = dec && utils.ua2utf8(dec)
+                                try {
+                                  return JSON.parse(jsonContent)
+                                } catch (e) {
+                                  console.log(
+                                    "Cannot parse patient",
+                                    p.id,
+                                    jsonContent || "Invalid content"
+                                  )
+                                  return p
+                                }
+                              })
+                              .catch(err => {
+                                console.log("Cannot decrypt patient", p.id, err)
                                 return p
-                              }
-                            })
-                            .catch(err => {
-                              console.log("Cannot decrypt patient", p.id, err)
-                              return p
-                            })
-                        )
+                              })
+                          )
+                          .then(p => {
+                            if (p.picture && !(p.picture instanceof ArrayBuffer)) {
+                              p.picture = decodeBase64(p.picture)
+                            }
+                            return p
+                          })
                       )
                     })
                 : Promise.resolve(p)

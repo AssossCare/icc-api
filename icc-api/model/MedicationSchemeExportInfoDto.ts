@@ -12,6 +12,8 @@
 import { HealthcarePartyDto } from "./HealthcarePartyDto"
 import { ServiceDto } from "./ServiceDto"
 
+import { decodeBase64 } from "./ModelHelper"
+
 export class MedicationSchemeExportInfoDto {
   constructor(json: JSON | any) {
     Object.assign(this as MedicationSchemeExportInfoDto, json)
@@ -21,4 +23,5 @@ export class MedicationSchemeExportInfoDto {
   services?: Array<ServiceDto>
   recipient?: HealthcarePartyDto
   comment?: string
+  serviceAuthors?: Array<HealthcarePartyDto>
 }

@@ -11,6 +11,8 @@
  */
 import { TelecomDto } from "./TelecomDto"
 
+import { decodeBase64 } from "./ModelHelper"
+
 export class AddressDto {
   constructor(json: JSON | any) {
     Object.assign(this as AddressDto, json)
@@ -23,6 +25,7 @@ export class AddressDto {
   postboxNumber?: string
   postalCode?: string
   city?: string
+  state?: string
   country?: string
   note?: string
   telecoms?: Array<TelecomDto>

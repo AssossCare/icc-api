@@ -11,6 +11,8 @@
  */
 import { SamTextDto } from "./SamTextDto"
 
+import { decodeBase64 } from "./ModelHelper"
+
 export class NmpDto {
   constructor(json: JSON | any) {
     Object.assign(this as NmpDto, json)
@@ -22,6 +24,7 @@ export class NmpDto {
   from?: number
   to?: number
   code?: string
+  productId?: string
   category?: string
   commercialStatus?: string
   name?: SamTextDto

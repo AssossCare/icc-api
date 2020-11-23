@@ -12,9 +12,15 @@
 import { CodeStubDto } from "./CodeStubDto"
 import { DelegationDto } from "./DelegationDto"
 
+import { decodeBase64 } from "./ModelHelper"
+
 export class DocumentDto {
   constructor(json: JSON | any) {
-    Object.assign(this as DocumentDto, json)
+    Object.assign(
+      this as DocumentDto,
+      json,
+      json.attachment ? { attachment: decodeBase64(json.attachment) } : {}
+    )
   }
 
   id?: string
@@ -35,9 +41,16 @@ export class DocumentDto {
   externalUri?: string
   mainUti?: string
   name?: string
+  version?: string
   otherUtis?: Array<string>
   storedICureDocumentId?: string
+  externalUuid?: string
+  size?: number
+  hash?: string
+  openingContactId?: string
   attachmentId?: string
+  idOpeningContact?: string
+  idClosingContact?: string
   secretForeignKeys?: Array<string>
   cryptedForeignKeys?: { [key: string]: Array<DelegationDto> }
   delegations?: { [key: string]: Array<DelegationDto> }

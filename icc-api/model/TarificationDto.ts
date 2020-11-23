@@ -13,6 +13,8 @@ import { LetterValueDto } from "./LetterValueDto"
 import { PeriodicityDto } from "./PeriodicityDto"
 import { ValorisationDto } from "./ValorisationDto"
 
+import { decodeBase64 } from "./ModelHelper"
+
 export class TarificationDto {
   constructor(json: JSON | any) {
     Object.assign(this as TarificationDto, json)
@@ -22,6 +24,7 @@ export class TarificationDto {
   rev?: string
   deletionDate?: number
   label?: { [key: string]: string }
+  context?: string
   type?: string
   code?: string
   version?: string
